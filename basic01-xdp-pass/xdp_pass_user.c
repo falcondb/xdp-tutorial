@@ -26,7 +26,7 @@ static const struct option_wrapper long_options[] = {
 	 "Install XDP program in SKB (AKA generic) mode"},
 
 	{{"native-mode", no_argument,		NULL, 'N' },
-	 "Install XDP program in native mode"},
+	 "Install XDP program in native mode"},https://github.com/falcondb/xdp-tutorial.git
 
 	{{"auto-mode",   no_argument,		NULL, 'A' },
 	 "Auto-detect SKB or native mode"},
