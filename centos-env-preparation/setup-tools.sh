@@ -33,3 +33,11 @@ function upgrade_clang5 {
   yum install llvm-toolset-7
   scl enable llvm-toolset-7 bash
 }
+
+
+# for assignment in lesson 2 adding package abort/exception
+# other than using perf to trace the xdp:xdp_exception event
+# Ftrace is another option
+function enable_ftrace_xdp_exception {
+  echo 1 /sys/kernel/debug/tracing/events/xdp/xdp_exception/enable
+}
