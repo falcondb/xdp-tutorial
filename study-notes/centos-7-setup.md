@@ -11,3 +11,34 @@ yum --enablerepo=elrepo-kernel install kernel-ml${KERNEL_VERSION} kernel-ml-deve
 update GRUB_DEFAULT=0 in /etc/default/grub
 reboot
 ```
+
+### Tool set install
+the following tools are required
+```
+yum update
+yum install -y libbpf llvm clang elfutils-libelf-devel \
+               libpcap-dev gcc-multilib build-essential \
+               perf install kernel-headers bpftool bison flex
+```
+
+
+### IPRoute2 upgraded
+The default IP utility in IPRoute2 package doesn't support XDP loading.
+Upgraded IPRoute2 to latest
+```
+yum install bison flex
+cd /temp
+git clone https://git.kernel.org/pub/scm/network/iproute2/iproute2.git
+cd iproute2
+./configure --prefix=/usr
+make && make install
+ip -V
+```
+
+### Upgrade llvm-toolset-7
+The default llvm clang toolset doesn't support XDP, so upgraded it
+```
+yum install centos-release-scl
+yum install llvm-toolset-7
+scl enable llvm-toolset-7 bash
+```
