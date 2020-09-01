@@ -191,25 +191,6 @@ static void stats_collect(int map_fd, __u32 map_type,
 	}
 }
 
-static void stats_poll(int map_fd, __u32 map_type, int interval)
-{
-	struct stats_record prev, record = { 0 };
-
-	/* Trick to pretty printf with thousands separators use %' */
-	setlocale(LC_NUMERIC, "en_US");
-
-	/* Get initial reading quickly */
-	stats_collect(map_fd, map_type, &record);
-	usleep(1000000/4);
-
-	while (1) {
-		prev = record; /* struct copy */
-		stats_collect(map_fd, map_type, &record);
-		stats_print(&record, &prev);
-		sleep(interval);
-	}
-}
-
 #ifndef PATH_MAX
 #define PATH_MAX	4096
 #endif
@@ -218,17 +199,22 @@ const char *pin_basedir =  "/sys/fs/bpf";
 
 int main(int argc, char **argv)
 {
-	struct bpf_map_info map_expect = { 0 };
+	struct bpf_map_info prev_info = { 0 };
 	struct bpf_map_info info = { 0 };
 	char pin_dir[PATH_MAX];
-	int stats_map_fd;
+	int stats_map_fd, prev_fd;
 	int interval = 2;
-	int len, err;
+	int len;
 
 	struct config cfg = {
 		.ifindex   = -1,
 		.do_unload = false,
 	};
+
+	struct stats_record prev, record = { 0 };
+
+    /* Trick to pretty printf with thousands separators use %' */
+    setlocale(LC_NUMERIC, "en_US");
 
 	/* Cmdline options can change progsec */
 	parse_cmdline_args(argc, argv, long_options, &cfg, __doc__);
@@ -252,15 +238,6 @@ int main(int argc, char **argv)
 		return EXIT_FAIL_BPF;
 	}
 
-	/* check map info, e.g. datarec is expected size */
-	map_expect.key_size    = sizeof(__u32);
-	map_expect.value_size  = sizeof(struct datarec);
-	map_expect.max_entries = XDP_ACTION_MAX;
-	err = check_map_fd_info(&info, &map_expect);
-	if (err) {
-		fprintf(stderr, "ERR: map via FD not compatible\n");
-		return err;
-	}
 	if (verbose) {
 		printf("\nCollecting stats from BPF map\n");
 		printf(" - BPF map (bpf_map_type:%d) id:%d name:%s"
@@ -270,6 +247,25 @@ int main(int argc, char **argv)
 		       );
 	}
 
-	stats_poll(stats_map_fd, info.type, interval);
+	while (1) {
+		prev = record; /* struct copy */
+		stats_collect(stats_map_fd, info.type, &record);
+		stats_print(&record, &prev);
+		sleep(interval);
+		stats_map_fd = open_bpf_map_file(pin_dir, "xdp_stats_map", &info);
+		if (stats_map_fd < 0) {
+		    close(stats_map_fd);
+		    return EXIT_FAIL_BPF;
+		}
+		if (prev_info.id != info.id) {
+            printf("BPF map is changed, reset stats\n");
+            memset(&record, 0, sizeof(struct stats_record));
+            prev_info = info;
+            close(prev_fd);
+            prev_fd = stats_map_fd;
+		}
+	}
+
+    close(stats_map_fd);
 	return EXIT_OK;
 }
