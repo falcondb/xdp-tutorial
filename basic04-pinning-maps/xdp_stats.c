@@ -156,7 +156,7 @@ void map_get_value_percpu_array(int fd, __u32 key, struct datarec *value)
 
 static bool map_collect(int fd, __u32 map_type, __u32 key, struct record *rec)
 {
-	struct datarec value;
+	struct datarec value = { 0 };
 
 	/* Get time as close as possible to reading map contents */
 	rec->timestamp = gettime();
