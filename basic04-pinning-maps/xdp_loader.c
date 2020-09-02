@@ -111,6 +111,27 @@ int pin_maps_in_bpf_object(struct bpf_object *bpf_obj, const char *subdir)
 	return 0;
 }
 
+void check_reuse_pinned_map(struct config *cfg)
+{
+    /**
+     * check if exists a pinned map, if it does, set struct config .reuse_maps = true
+     * the load_bpf_and_xdp_attach() will call load_bpf_object_file_reuse_maps()
+     */
+    int fd;
+    char path[IF_NAMESIZE + PATH_MAX];
+
+    if (cfg) {
+        snprintf(path, PATH_MAX + IF_NAMESIZE, "%s/%s/%s", pin_basedir, cfg->ifname, map_name);
+        fd = bpf_obj_get(path);
+        if (fd) {
+            cfg->reuse_maps = true;
+            close(fd);
+        } else {
+            cfg->reuse_maps = false;
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
 	struct bpf_object *bpf_obj;
@@ -141,6 +162,8 @@ int main(int argc, char **argv)
         fprintf(stderr, "ERR: creating pin dirname\n");
         return EXIT_FAIL_OPTION;
     }
+
+    check_reuse_pinned_map(&cfg);
 
 	bpf_obj = load_bpf_and_xdp_attach(&cfg);
 	if (!bpf_obj)
