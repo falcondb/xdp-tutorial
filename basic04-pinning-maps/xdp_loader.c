@@ -137,6 +137,11 @@ int main(int argc, char **argv)
 		return xdp_link_detach(cfg.ifindex, cfg.xdp_flags, 0);
 	}
 
+    if (snprintf(cfg.pin_dir, PATH_MAX, "%s/%s", pin_basedir, cfg.ifname) < 0) {
+        fprintf(stderr, "ERR: creating pin dirname\n");
+        return EXIT_FAIL_OPTION;
+    }
+
 	bpf_obj = load_bpf_and_xdp_attach(&cfg);
 	if (!bpf_obj)
 		return EXIT_FAIL_BPF;
