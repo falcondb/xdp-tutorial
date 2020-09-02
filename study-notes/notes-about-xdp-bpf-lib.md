@@ -141,6 +141,23 @@ struct bpf_map_def {
 	unsigned int max_entries;
 	unsigned int map_flags;
 };
+
+struct bpf_map_info {
+	__u32 type;
+	__u32 id;
+	__u32 key_size;
+	__u32 value_size;
+	__u32 max_entries;
+	__u32 map_flags;
+	char  name[BPF_OBJ_NAME_LEN];
+	__u32 ifindex;
+	__u32 :32;
+	__u64 netns_dev;
+	__u64 netns_ino;
+	__u32 btf_id;
+	__u32 btf_key_type_id;
+	__u32 btf_value_type_id;
+}
 ```
 ### common code
 
@@ -162,3 +179,10 @@ __load_bpf_and_xdp_attach ==> __load_bpf_object_file; bpf_object__find_program_b
 
 ```
 ### Lesson 3
+Note about the userspace stats program handles map-reloading.
+> when userspace reads the map by syscall, it checks if the id in the bpf_map_info is different from the one previously read from kernel. If changed, use the new fd to read the map.
+
+### Lesson 4
+Note about reusing an existing map when reloading an ELF with map definition inside (keep the existing map with the same path and settings and only reload the BPF program):
+> * tools/lib/bpf/bpf.c provides a wrapper function for bpf syscall with BPF_OBJ_GET, which get the fd of the pinned map from kernel.
+> * tools/lib/bpf/bpf_object__reuse_map.c:bpf_object__reuse_map() first tries to get the fd of the specified pinned map (using the path) by querying kernel, and check the compatibility. Then calls bpf_map__reuse_fd() that makes a syscall with BPF_OBJ_GET_INFO_BY_FD to get bpf_map_info. Open a new fd, and dup the fd of the existing map to the new fd, finally, sets the bpf_map_info of the existing map from kernel to the bpf_map loaded from ELF file.
