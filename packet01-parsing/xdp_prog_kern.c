@@ -36,7 +36,7 @@ static __always_inline int parse_ethhdr(struct hdr_cursor *nh,
 	/* Byte-count bounds check; check if current pointer + size of header
 	 * is after data_end.
 	 */
-	if (nh->pos + 1 > data_end)
+	if (nh->pos + hdrsize > data_end)
 		return -1;
 
 	nh->pos += hdrsize;
@@ -46,11 +46,17 @@ static __always_inline int parse_ethhdr(struct hdr_cursor *nh,
 }
 
 /* Assignment 2: Implement and use this */
-/*static __always_inline int parse_ip6hdr(struct hdr_cursor *nh,
+static __always_inline int parse_ip6hdr(struct hdr_cursor *nh,
 					void *data_end,
 					struct ipv6hdr **ip6hdr)
 {
-}*/
+    *ip6hdr = nh->pos;
+    if (nh->pos + sizeof(struct ipv6hdr) > data_end )
+        return -1;
+
+    nh->pos += sizeof(struct ipv6hdr);
+    return (*ip6hdr)->nexthdr;
+}
 
 /* Assignment 3: Implement and use this */
 /*static __always_inline int parse_icmp6hdr(struct hdr_cursor *nh,
@@ -65,16 +71,17 @@ int  xdp_parser_func(struct xdp_md *ctx)
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data = (void *)(long)ctx->data;
 	struct ethhdr *eth;
+	struct ipv6hdr *ip6hdr;
 
 	/* Default action XDP_PASS, imply everything we couldn't parse, or that
 	 * we don't want to deal with, we just pass up the stack and let the
 	 * kernel deal with it.
 	 */
-	__u32 action = XDP_PASS; /* Default action */
+	__u32 action = XDP_DROP; /* Default action */
 
         /* These keep track of the next header type and iterator pointer */
 	struct hdr_cursor nh;
-	int nh_type;
+	int nh_type, nh_proto;
 
 	/* Start next header cursor position at data start */
 	nh.pos = data;
@@ -84,12 +91,20 @@ int  xdp_parser_func(struct xdp_md *ctx)
 	 * header type in the packet correct?), and bounds checking.
 	 */
 	nh_type = parse_ethhdr(&nh, data_end, &eth);
-	if (nh_type != bpf_htons(ETH_P_IPV6))
-		goto out;
+	if (nh_type == bpf_htons(ETH_P_IPV6))
+	    nh_proto = parse_ip6hdr(&nh, data_end, &ip6hdr);
+//    else if (nh_type == bpf_htons(ETH_P_IP))
+//		nh_proto = parse_iphdr(&nh, data_end, &ip6hdr);
+    else {
+        action = XDP_ABORTED;
+        goto out;
+    }
 
-	/* Assignment additions go below here */
+    if (nh_proto == IPPROTO_TCP) {
+        action = XDP_PASS;
+        goto out;
+    }
 
-	action = XDP_DROP;
 out:
 	return xdp_stats_record_action(ctx, action); /* read via xdp_stats */
 }
