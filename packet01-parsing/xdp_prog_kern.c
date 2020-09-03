@@ -51,7 +51,7 @@ static __always_inline int parse_ip6hdr(struct hdr_cursor *nh,
 					struct ipv6hdr **ip6hdr)
 {
     *ip6hdr = nh->pos;
-    if (nh->pos + sizeof(struct ipv6hdr) > data_end )
+    if (ip6hdr + 1 > data_end )
         return -1;
 
     nh->pos += sizeof(struct ipv6hdr);
