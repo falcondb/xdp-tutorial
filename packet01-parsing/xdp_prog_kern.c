@@ -59,11 +59,16 @@ static __always_inline int parse_ip6hdr(struct hdr_cursor *nh,
 }
 
 /* Assignment 3: Implement and use this */
-/*static __always_inline int parse_icmp6hdr(struct hdr_cursor *nh,
+static __always_inline int parse_icmp6hdr(struct hdr_cursor *nh,
 					  void *data_end,
 					  struct icmp6hdr **icmp6hdr)
 {
-}*/
+    *icmp6hdr = nh->pos;
+    if (*icmp6hdr + 1 > data_end)
+        return -1;
+    nh->pos += sizeof(*icmp6hdr);
+    return (*icmp6hdr)->type;
+}
 
 SEC("xdp_packet_parser")
 int  xdp_parser_func(struct xdp_md *ctx)
@@ -72,6 +77,7 @@ int  xdp_parser_func(struct xdp_md *ctx)
 	void *data = (void *)(long)ctx->data;
 	struct ethhdr *eth;
 	struct ipv6hdr *ip6hdr;
+	struct icmp6hdr *icmp6_hdr;
 
 	/* Default action XDP_PASS, imply everything we couldn't parse, or that
 	 * we don't want to deal with, we just pass up the stack and let the
@@ -81,7 +87,7 @@ int  xdp_parser_func(struct xdp_md *ctx)
 
         /* These keep track of the next header type and iterator pointer */
 	struct hdr_cursor nh;
-	int nh_type, nh_proto;
+	int nh_type, nh_proto, icmp_type;
 
 	/* Start next header cursor position at data start */
 	nh.pos = data;
@@ -102,6 +108,17 @@ int  xdp_parser_func(struct xdp_md *ctx)
 
     if (nh_proto == IPPROTO_TCP) {
         action = XDP_PASS;
+        goto out;
+    } else if ( nh_proto == IPPROTO_ICMP ) {
+        icmp_type = parse_icmp6hdr(&nh, data_end, &icmp6_hdr);
+        switch (icmp_type) {
+            case ICMPV6_ECHO_REQUEST:
+                action = XDP_PASS;
+                break;
+            case ICMPV6_ECHO_REPLY:
+                action = XDP_DROP;
+                break;
+        }
         goto out;
     }
 
