@@ -3,6 +3,8 @@
 
 ### testenv script
 
+> Setup routing between a veth pair
+`ip neigh add "$INSIDE_IP4" lladdr "$INSIDE_MAC" dev "$NS" nud permanent`
 
 ### data structures
 #### bpf_object
@@ -162,7 +164,7 @@ struct bpf_map_info {
 ### common code
 
 
-### Lesson 1
+### Lesson basic01
 ```
 // Read the bpf object file and program fd with the given file name
 bpf_prog_load() ==> bpf_prog_load_xattr() ==> bpf_object__open_xattr ==> __bpf_object__open ==> bpf_object__new // create a new bpf_object and fit it in
@@ -172,17 +174,23 @@ xdp_link_attach ==> bpf_set_link_xdp_fd (tools/lib/bpf/netlink.c)) ==> libbpf_ne
 
 ```
 
-### Lesson 2
+### Lesson basic02
 
 ```
 __load_bpf_and_xdp_attach ==> __load_bpf_object_file; bpf_object__find_program_by_title; bpf_program__fd; xdp_link_attach
 
 ```
-### Lesson 3
+### Lesson basic03
 Note about the userspace stats program handles map-reloading.
 > when userspace reads the map by syscall, it checks if the id in the bpf_map_info is different from the one previously read from kernel. If changed, use the new fd to read the map.
 
-### Lesson 4
+### Lesson basic04
 Note about reusing an existing map when reloading an ELF with map definition inside (keep the existing map with the same path and settings and only reload the BPF program):
 > * tools/lib/bpf/bpf.c provides a wrapper function for bpf syscall with BPF_OBJ_GET, which get the fd of the pinned map from kernel.
 > * tools/lib/bpf/bpf_object__reuse_map.c:bpf_object__reuse_map() first tries to get the fd of the specified pinned map (using the path) by querying kernel, and check the compatibility. Then calls bpf_map__reuse_fd() that makes a syscall with BPF_OBJ_GET_INFO_BY_FD to get bpf_map_info. Open a new fd, and dup the fd of the existing map to the new fd, finally, sets the bpf_map_info of the existing map from kernel to the bpf_map loaded from ELF file.
+
+
+### Lesson packet01
+
+The XDP is only attached to the ingress path, not the egress path.
+IP layer definition in in.h
