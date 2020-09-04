@@ -67,7 +67,7 @@ static __always_inline int parse_icmp6hdr(struct hdr_cursor *nh,
     if (*icmp6hdr + 1 > data_end)
         return -1;
     nh->pos += sizeof(*icmp6hdr);
-    return (*icmp6hdr)->type;
+    return (*icmp6hdr)->icmp6_type;
 }
 
 SEC("xdp_packet_parser")
