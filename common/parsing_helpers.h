@@ -64,7 +64,7 @@ static __always_inline int proto_is_vlan(__u16 h_proto)
 	return !!(h_proto == bpf_htons(ETH_P_8021Q) ||
 		  h_proto == bpf_htons(ETH_P_8021AD));
 }
-x``
+
 /* Notice, parse_ethhdr() will skip VLAN tags, by advancing nh->pos and returns
  * next header EtherType, BUT the ethhdr pointer supplied still points to the
  * Ethernet header. Thus, caller can look at eth->h_proto to see if this was a
