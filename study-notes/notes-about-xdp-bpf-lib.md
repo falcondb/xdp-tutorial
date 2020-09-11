@@ -192,5 +192,9 @@ Note about reusing an existing map when reloading an ELF with map definition ins
 
 ### Lesson packet01
 
-The XDP is only attached to the ingress path, not the egress path.
-IP layer definition in in.h
+* The XDP is only attached to the ingress path, not the egress path.
+* Seems sizeof(a struct XXX pointer) != sizeof(struct XXX). It should be same in regular c application, not sure about Clang/LLVM and BPF
+* in bpf_endian.h, htons, htonl, ntohs, ntohl, remember the endian issue. Refer to [BPF Portability and CO-RE](https://facebookmicrosites.github.io/bpf/blog/2020/02/19/bpf-portability-and-co-re.html)
+* IP package type definition is in if_ether.h, since the IP type is in the layer 2 frame
+* IP4 layer definition in in.h; IP6 layer definition in in6.h
+* icmp.h and icmpv6.h
