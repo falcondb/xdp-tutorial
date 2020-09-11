@@ -93,12 +93,19 @@ static __always_inline int parse_icmp6hdr(struct hdr_cursor *nh,
     return (*icmpv6hdr)->icmp6_type;
 }
 
-//static __always_inline int parse_icmp4hdr(struct hdr_cursor *nh,
-//					  void *data_end,
-//					  struct icmphdr **icmpv4hdr)
-//{
-//
-//}
+static __always_inline int parse_icmp4hdr(struct hdr_cursor *nh,
+					  void *data_end,
+					  struct icmphdr **icmpv4hdr)
+{
+    int hdrsize = sizeof(struct icmphdr);
+    if (nh->pos + hdrsize > data_end)
+        return -1;
+
+    *icmpv4hdr = nh->pos;
+    nh->pos +=  hdrsize;
+
+    return (*icmpv4hdr)->type;
+}
 
 SEC("xdp_packet_parser")
 int  xdp_parser_func(struct xdp_md *ctx)
@@ -109,6 +116,7 @@ int  xdp_parser_func(struct xdp_md *ctx)
 	struct ipv6hdr *ip6hdr;
 	struct iphdr *ip4hdr;
 	struct icmp6hdr *icmpv6hdr;
+	struct icmphdr *icmpv4hdr;
 
 	/* Default action XDP_PASS, imply everything we couldn't parse, or that
 	 * we don't want to deal with, we just pass up the stack and let the
@@ -136,18 +144,34 @@ int  xdp_parser_func(struct xdp_md *ctx)
             icmp_type = parse_icmp6hdr(&nh, data_end, &icmpv6hdr);
             if (icmp_type == ICMPV6_ECHO_REPLY || icmp_type == ICMPV6_ECHO_REQUEST)
             {
-                action = XDP_PASS;
+                if (bpf_ntohs(icmpv6hdr->icmp6_sequence) & 0x1)
+                    action = XDP_PASS;
             }
             goto out;
         } else if (nh_proto == IPPROTO_TCP)
         {
-            action = XDP_PASS;
+            action = XDP_TX;
             goto out;
         }
     }
     else if (nh_type == bpf_htons(ETH_P_IP))
     {
 		nh_proto = parse_ip4hdr(&nh, data_end, &ip4hdr);
+        if (nh_proto == IPPROTO_ICMP)
+        {
+            icmp_type = parse_icmp4hdr(&nh, data_end, &icmpv4hdr);
+
+            if (icmp_type == ICMP_ECHOREPLY || icmp_type == ICMP_ECHO)
+            {
+                if (bpf_ntohs(icmpv4hdr->un.echo.sequence) & 0x1)
+                    action = XDP_PASS;
+            }
+            goto out;
+        } else if (nh_proto == IPPROTO_TCP)
+        {
+            action = XDP_TX;
+            goto out;
+        }
     }
     else {
         action = XDP_ABORTED;
