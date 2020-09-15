@@ -42,3 +42,10 @@ yum install centos-release-scl
 yum install llvm-toolset-7
 scl enable llvm-toolset-7 bash
 ```
+
+### Upgrade gcc
+```
+yum install centos-release-scl
+yum install devtoolset-7-gcc*
+scl enable devtoolset-7 bash
+```

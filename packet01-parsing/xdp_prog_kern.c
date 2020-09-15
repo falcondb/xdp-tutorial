@@ -15,9 +15,33 @@
 #include "../common/xdp_stats_kern_user.h"
 #include "../common/xdp_stats_kern.h"
 
+/* NOTICE: Re-defining VLAN header levels to parse */
+#define VLAN_MAX_DEPTH 10
+//#include "../common/parsing_helpers.h"
+/*
+ * NOTICE: Copied over parts of ../common/parsing_helpers.h
+ *         to make it easier to point out compiler optimizations
+ */
+
 /* Header cursor to keep track of current parsing position */
 struct hdr_cursor {
 	void *pos;
+};
+
+static __always_inline int proto_is_vlan(__u16 h_proto)
+{
+	return !!(h_proto == bpf_htons(ETH_P_8021Q) ||
+		  h_proto == bpf_htons(ETH_P_8021AD));
+}
+
+/*
+ *	struct vlan_hdr - vlan header
+ *	@h_vlan_TCI: priority and VLAN ID
+ *	@h_vlan_encapsulated_proto: packet type ID or len
+ */
+struct vlan_hdr {
+	__be16	h_vlan_TCI;
+	__be16	h_vlan_encapsulated_proto; /* NOTICE: unsigned type */
 };
 
 /* Packet parsing helpers.
@@ -29,12 +53,14 @@ struct hdr_cursor {
  * (h_proto for Ethernet, nexthdr for IPv6), for ICMP it is the ICMP type field.
  * All return values are in host byte order.
  */
-static __always_inline int parse_ethhdr(struct hdr_cursor *nh,
-					void *data_end,
+static __always_inline int parse_ethhdr(struct hdr_cursor *nh, void *data_end,
 					struct ethhdr **ethhdr)
 {
 	struct ethhdr *eth = nh->pos;
 	int hdrsize = sizeof(*eth);
+	struct vlan_hdr *vlh;
+	__u16 h_proto;
+	int i;
 
 	/* Byte-count bounds check; check if current pointer + size of header
 	 * is after data_end.
@@ -44,8 +70,26 @@ static __always_inline int parse_ethhdr(struct hdr_cursor *nh,
 
 	nh->pos += hdrsize;
 	*ethhdr = eth;
+	vlh = nh->pos;
+	h_proto = eth->h_proto;
 
-	return eth->h_proto; /* network-byte-order */
+	/* Use loop unrolling to avoid the verifier restriction on loops;
+	 * support up to VLAN_MAX_DEPTH layers of VLAN encapsulation.
+	 */
+	#pragma unroll
+	for (i = 0; i < VLAN_MAX_DEPTH; i++) {
+		if (!proto_is_vlan(h_proto))
+			break;
+
+		if (vlh + 1 > data_end)
+			break;
+
+		h_proto = vlh->h_vlan_encapsulated_proto;
+		vlh++;
+	}
+
+	nh->pos = vlh;
+	return h_proto; /* network-byte-order */
 }
 
 /* Assignment 2: Implement and use this */
