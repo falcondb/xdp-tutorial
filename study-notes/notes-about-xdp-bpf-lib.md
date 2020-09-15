@@ -198,3 +198,13 @@ Note about reusing an existing map when reloading an ELF with map definition ins
 * IP package type definition is in if_ether.h, since the IP type is in the layer 2 frame
 * IP4 layer definition in in.h; IP6 layer definition in in6.h
 * icmp.h and icmpv6.h
+
+When change the build toolchain and see "llc: error: expected top-level entity", the toolchain is mess up, reinstall them.
+* The Vlan header [TPID 2 bytes, TCI 2 bytes] is added between source MAC and ethernet type. So, define
+```
+struct vlan_hdr {
+	__be16	h_vlan_TCI;
+	__be16	h_vlan_encapsulated_proto;
+};
+```
+and then set the vlan_hdr pointer to the offset sizeof(ethernet header), the ethhdr.h_proto is the vlan TPID, and the TCI is the next 2 bytes. The encapsulated ethernet type will be at h_vlan_encapsulated_proto

@@ -15,24 +15,13 @@
 #include "../common/xdp_stats_kern_user.h"
 #include "../common/xdp_stats_kern.h"
 
-/* NOTICE: Re-defining VLAN header levels to parse */
 #define VLAN_MAX_DEPTH 10
-//#include "../common/parsing_helpers.h"
-/*
- * NOTICE: Copied over parts of ../common/parsing_helpers.h
- *         to make it easier to point out compiler optimizations
- */
 
 /* Header cursor to keep track of current parsing position */
 struct hdr_cursor {
 	void *pos;
 };
 
-static __always_inline int proto_is_vlan(__u16 h_proto)
-{
-	return !!(h_proto == bpf_htons(ETH_P_8021Q) ||
-		  h_proto == bpf_htons(ETH_P_8021AD));
-}
 
 /*
  *	struct vlan_hdr - vlan header
@@ -59,7 +48,7 @@ static __always_inline int parse_ethhdr(struct hdr_cursor *nh, void *data_end,
 	struct ethhdr *eth = nh->pos;
 	int hdrsize = sizeof(*eth);
 	struct vlan_hdr *vlh;
-	__u16 h_proto;
+	__be16 eth_type;
 	int i;
 
 	/* Byte-count bounds check; check if current pointer + size of header
@@ -71,25 +60,23 @@ static __always_inline int parse_ethhdr(struct hdr_cursor *nh, void *data_end,
 	nh->pos += hdrsize;
 	*ethhdr = eth;
 	vlh = nh->pos;
-	h_proto = eth->h_proto;
+	eth_type = eth->h_proto;
 
-	/* Use loop unrolling to avoid the verifier restriction on loops;
-	 * support up to VLAN_MAX_DEPTH layers of VLAN encapsulation.
-	 */
 	#pragma unroll
 	for (i = 0; i < VLAN_MAX_DEPTH; i++) {
-		if (!proto_is_vlan(h_proto))
+		if ( eth_type != bpf_htons(ETH_P_8021Q) &&
+             eth_type != bpf_htons(ETH_P_8021AD) )
 			break;
 
 		if (vlh + 1 > data_end)
 			break;
 
-		h_proto = vlh->h_vlan_encapsulated_proto;
+		eth_type = vlh->h_vlan_encapsulated_proto;
 		vlh++;
 	}
 
 	nh->pos = vlh;
-	return h_proto; /* network-byte-order */
+	return eth_type; /* network-byte-order */
 }
 
 /* Assignment 2: Implement and use this */
