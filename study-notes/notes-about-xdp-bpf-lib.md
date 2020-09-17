@@ -160,6 +160,16 @@ struct bpf_map_info {
 	__u32 btf_key_type_id;
 	__u32 btf_value_type_id;
 }
+
+#uapi/linux/bpf.h
+struct xdp_md {
+	__u32 data;
+	__u32 data_end;
+	__u32 data_meta;
+	/* Below access go through struct xdp_rxq_info */
+	__u32 ingress_ifindex; /* rxq->dev->ifindex */
+	__u32 rx_queue_index;  /* rxq->queue_index  */
+};
 ```
 ### common code
 
@@ -208,3 +218,6 @@ struct vlan_hdr {
 };
 ```
 and then set the vlan_hdr pointer to the offset sizeof(ethernet header), the ethhdr.h_proto is the vlan TPID, and the TCI is the next 2 bytes. The encapsulated ethernet type will be at h_vlan_encapsulated_proto
+
+### Lesson packet02
+The checksum in UDP is optional for IPV4, but mandatory for IPV6. Need to fix the checksum in IPV6.
