@@ -11,6 +11,8 @@
 #include "../common/xdp_stats_kern_user.h"
 #include "../common/xdp_stats_kern.h"
 
+#define FAKEDVID 102
+
 #define bpf_printk(fmt, ...)                                    \
 ({                                                              \
 	char ____fmt[] = fmt;                                   \
@@ -39,7 +41,7 @@ static __always_inline int vlan_tag_pop(struct xdp_md *ctx, struct ethhdr *eth)
     if (eth + 1 > data_end)
         return -1;
 
-    vlh = eth + 1;
+    vlh = (struct vlan_hdr*) (eth + 1);
     if (vlh + 1 > data_end)
         return 1;
 
@@ -48,7 +50,7 @@ static __always_inline int vlan_tag_pop(struct xdp_md *ctx, struct ethhdr *eth)
     h_proto = vlh->h_vlan_encapsulated_proto;
 
 	/* Make a copy of the outer Ethernet header before we cut it off */
-    __builtin_memcpy(&eth_cpy, ehdr, sizeof(eth_cpy));
+    __builtin_memcpy(&eth_cpy, eth, sizeof(eth_cpy));
 
 	/* Actually adjust the head pointer */
     if (bpf_xdp_adjust_head(ctx, (int)sizeof(*vlh)))
@@ -63,8 +65,8 @@ static __always_inline int vlan_tag_pop(struct xdp_md *ctx, struct ethhdr *eth)
 		return -1;
 
 	/* Copy back the old Ethernet header and update the proto type */
-    __builtin_memcpy(ehdr, &eth_cpy, sizeof(*ehdr));
-    ehdr->h_proto = h_proto;
+    __builtin_memcpy(eth, &eth_cpy, sizeof(*eth));
+    eth->h_proto = h_proto;
 
 	return vlid;
 }
@@ -75,6 +77,29 @@ static __always_inline int vlan_tag_pop(struct xdp_md *ctx, struct ethhdr *eth)
 static __always_inline int vlan_tag_push(struct xdp_md *ctx,
 					 struct ethhdr *eth, int vlid)
 {
+	struct vlan_hdr vlh;
+	struct ethhdr ehdr;
+	__be16 eth_type = eth->h_proto;
+
+	if (eth_type == bpf_htons(ETH_P_IP) || eth_type == bpf_htons(ETH_P_IPV6))
+	{
+	    __builtin_memcpy(&ehdr, eth, sizeof(*eth));
+	    if (bpf_xdp_adjust_head(ctx, -(int)sizeof(vlh)))
+	        return -1;
+
+	    if (ctx->data + sizeof(ehdr) + sizeof(vlh) > ctx->data_end)
+	        return -1;
+
+        ehdr.h_proto = bpf_htons(ETH_P_8021Q);
+        __builtin_memcpy((void *)(long)ctx->data, &ehdr, sizeof(ehdr));
+        vlh.h_vlan_TCI = bpf_htons(vlid);
+        vlh.h_vlan_encapsulated_proto = eth_type;
+
+        if (ctx->data + sizeof(ehdr) + sizeof(vlh) > ctx->data_end)
+            return -1;
+	    __builtin_memcpy((void *)(long)ctx->data + sizeof(ehdr), &vlh, sizeof(vlh));
+	}
+
 	return 0;
 }
 
@@ -122,12 +147,10 @@ int xdp_patch_ports_func(struct xdp_md *ctx)
 			goto out;
 		}
 
-		bpf_printk("Desc port before: %d\n", bpf_ntohs(tcphdr->dest));
 		tcphdr->dest = bpf_htons(bpf_ntohs(tcphdr->dest) - 1);
 		action = XDP_PASS;
 		goto out;
 	} else {
-	    bpf_printk("Unknown IP type: %d\n", ip_type);
         action = XDP_ABORTED;
         goto out;
 	}
@@ -159,7 +182,7 @@ int xdp_vlan_swap_func(struct xdp_md *ctx)
 	if (proto_is_vlan(eth->h_proto))
 		vlan_tag_pop(ctx, eth);
 	else
-		vlan_tag_push(ctx, eth, 1);
+		vlan_tag_push(ctx, eth, FAKEDVID);
 
 	return XDP_PASS;
 }

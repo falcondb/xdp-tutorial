@@ -2,7 +2,7 @@
 
 
 ### testenv script
-
+The MAC addresses of the veth dev with vlan id are same as the their parent.
 > Setup routing between a veth pair
 `ip neigh add "$INSIDE_IP4" lladdr "$INSIDE_MAC" dev "$NS" nud permanent`
 
@@ -220,4 +220,7 @@ struct vlan_hdr {
 and then set the vlan_hdr pointer to the offset sizeof(ethernet header), the ethhdr.h_proto is the vlan TPID, and the TCI is the next 2 bytes. The encapsulated ethernet type will be at h_vlan_encapsulated_proto
 
 ### Lesson packet02
-The checksum in UDP is optional for IPV4, but mandatory for IPV6. Need to fix the checksum in IPV6.
+* The checksum in UDP is optional for IPV4, but mandatory for IPV6. Need to fix the checksum in IPV6.
+* The TCI (Tag control information) in 802.1q (vlan) header contains 3 bits priority level and 1 bit congestion collection,
+the rest 12 bits are for vid. The sample code doesn't explicitly separate them.
+* Be careful with overflow, and remember calling `bpf_htons()` to the header.
