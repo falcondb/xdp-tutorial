@@ -25,7 +25,7 @@ CMD=
 NS=
 XDP_LOADER=./xdp_loader
 XDP_STATS=./xdp_stats
-LEGACY_IP=$([ -z $USEIPV4 ] && echo 1 || echo 0)
+LEGACY_IP=
 
 USE_VLAN=0
 RUN_ON_INNER=0

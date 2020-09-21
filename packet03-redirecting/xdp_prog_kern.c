@@ -28,20 +28,39 @@ struct bpf_map_def SEC("maps") redirect_params = {
 	.value_size = ETH_ALEN,
 	.max_entries = 1,
 };
+
+static __always_inline __u16 csum16_add(__u16 csum, __u16 addend)
+{
+    csum += addend;
+    return csum + (csum < addend);
+}
+
 static __always_inline void swap_src_dst_mac(struct ethhdr *eth)
 {
 	/* Assignment 1: swap source and destination addresses in the eth.
 	 * For simplicity you can use the memcpy macro defined above */
+	 unsigned char	tmp_mac[ETH_ALEN];
+	 __builtin_memcpy(tmp_mac, eth->h_dest, ETH_ALEN);
+	 __builtin_memcpy(eth->h_dest, eth->h_source, ETH_ALEN);
+	 __builtin_memcpy(eth->h_source, tmp_mac, ETH_ALEN);
 }
 
 static __always_inline void swap_src_dst_ipv6(struct ipv6hdr *ipv6)
 {
 	/* Assignment 1: swap source and destination addresses in the iphv6dr */
+	struct in6_addr tmp_add;
+	tmp_add = ipv6->saddr;
+	ipv6->saddr = ipv6->daddr;
+	ipv6->daddr = tmp_add;
 }
 
 static __always_inline void swap_src_dst_ipv4(struct iphdr *iphdr)
 {
 	/* Assignment 1: swap source and destination addresses in the iphdr */
+	__be32 tmp_add;
+	tmp_add = iphdr->saddr;
+	iphdr->saddr = iphdr->daddr;
+	iphdr->daddr = tmp_add;
 }
 
 /* Implement packet03/assignment-1 in this section */
@@ -52,9 +71,9 @@ int xdp_icmp_echo_func(struct xdp_md *ctx)
 	void *data = (void *)(long)ctx->data;
 	struct hdr_cursor nh;
 	struct ethhdr *eth;
-	int eth_type;
-	int ip_type;
-	int icmp_type;
+	int eth_type = 0;
+	int ip_type = 0;
+	int icmp_type = 0;
 	struct iphdr *iphdr;
 	struct ipv6hdr *ipv6hdr;
 	__u16 echo_reply;
@@ -103,10 +122,13 @@ int xdp_icmp_echo_func(struct xdp_md *ctx)
 
 	/* Assignment 1: patch the packet and update the checksum. You can use
 	 * the echo_reply variable defined above to fix the ICMP Type field. */
+    icmphdr->cksum = ~csum16_add(csum16_add(icmphdr->cksum, -icmphdr->type), echo_reply);
+    icmphdr->type = echo_reply;
 
 	action = XDP_TX;
 
 out:
+	bpf_printk("Unknown Eth type: %hu\t%d\t%d\n", eth_type, ip_type, icmp_type);
 	return xdp_stats_record_action(ctx, action);
 }
 
