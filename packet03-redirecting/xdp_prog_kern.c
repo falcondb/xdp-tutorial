@@ -155,13 +155,9 @@ int xdp_icmp_echo_func(struct xdp_md *ctx)
 
 	/* Assignment 1: patch the packet and update the checksum. You can use
 	 * the echo_reply variable defined above to fix the ICMP Type field. */
+    icmphdr->cksum = ~(csum16_add(csum16_add(~icmphdr->cksum, ~(icmphdr->type)), echo_reply));
+    icmphdr->type = echo_reply;
 
-	 __u16 m0 = * (__u16 *) icmphdr;
-	 icmphdr->type = echo_reply;
-	 __u16 m1 = * (__u16 *) icmphdr;
-    icmphdr->cksum = ~(csum16_add(csum16_add(~icmphdr->cksum, ~m0), m1));
-	bpf_printk("Checksum:%x\n",icmphdr->cksum);
-	//bpf_printk("Checksum: %hu\tMy Checksum: %hu\n", icmphdr->cksum, ~(csum16_add(csum16_add(~icmphdr->cksum, ~m0), m1)));
 	action = XDP_TX;
 
 out:
