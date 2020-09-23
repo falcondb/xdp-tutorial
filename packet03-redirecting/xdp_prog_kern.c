@@ -110,7 +110,6 @@ int xdp_icmp_echo_func(struct xdp_md *ctx)
 	struct ipv6hdr *ipv6hdr;
 	__u16 echo_reply;
 	struct icmphdr_common *icmphdr;
-	//struct icmphdr_common icmphdr_old;
 	__u32 action = XDP_PASS;
 
 	/* These keep track of the next header type and iterator pointer */
@@ -157,11 +156,9 @@ int xdp_icmp_echo_func(struct xdp_md *ctx)
 	 * the echo_reply variable defined above to fix the ICMP Type field. */
     icmphdr->cksum = ~(csum16_add(csum16_add(~icmphdr->cksum, ~(icmphdr->type)), echo_reply));
     icmphdr->type = echo_reply;
-
 	action = XDP_TX;
 
 out:
-
 	return xdp_stats_record_action(ctx, action);
 }
 
