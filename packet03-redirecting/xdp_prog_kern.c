@@ -15,6 +15,13 @@
 #define memcpy(dest, src, n) __builtin_memcpy((dest), (src), (n))
 #endif
 
+#define bpf_printk(fmt, ...)                                    \
+({                                                              \
+	char ____fmt[] = fmt;                                   \
+	bpf_trace_printk(____fmt, sizeof(____fmt),              \
+                         ##__VA_ARGS__);                        \
+})
+
 struct bpf_map_def SEC("maps") tx_port = {
 	.type = BPF_MAP_TYPE_DEVMAP,
 	.key_size = sizeof(int),
@@ -34,6 +41,31 @@ static __always_inline __u16 csum16_add(__u16 csum, __u16 addend)
     csum += addend;
     return csum + (csum < addend);
 }
+
+
+static __always_inline __u16 csum_fold_helper(__u32 csum)
+{
+	return ~((csum & 0xffff) + (csum >> 16));
+}
+
+/*
+ * The icmp_checksum_diff function takes pointers to old and new structures and
+ * the old checksum and returns the new checksum.  It uses the bpf_csum_diff
+ * helper to compute the checksum difference. Note that the sizes passed to the
+ * bpf_csum_diff helper should be multiples of 4, as it operates on 32-bit
+ * words.
+ */
+static __always_inline __u16 icmp_checksum_diff(
+		__u16 seed,
+		struct icmphdr_common *icmphdr_new,
+		struct icmphdr_common *icmphdr_old)
+{
+	__u32 csum, size = sizeof(struct icmphdr_common);
+
+	csum = bpf_csum_diff((__be32 *)icmphdr_old, size, (__be32 *)icmphdr_new, size, seed);
+	return csum_fold_helper(csum);
+}
+
 
 static __always_inline void swap_src_dst_mac(struct ethhdr *eth)
 {
@@ -78,6 +110,7 @@ int xdp_icmp_echo_func(struct xdp_md *ctx)
 	struct ipv6hdr *ipv6hdr;
 	__u16 echo_reply;
 	struct icmphdr_common *icmphdr;
+	//struct icmphdr_common icmphdr_old;
 	__u32 action = XDP_PASS;
 
 	/* These keep track of the next header type and iterator pointer */
@@ -122,13 +155,17 @@ int xdp_icmp_echo_func(struct xdp_md *ctx)
 
 	/* Assignment 1: patch the packet and update the checksum. You can use
 	 * the echo_reply variable defined above to fix the ICMP Type field. */
-    icmphdr->cksum = ~csum16_add(csum16_add(icmphdr->cksum, -icmphdr->type), echo_reply);
-    icmphdr->type = echo_reply;
 
+	 __u16 m0 = * (__u16 *) icmphdr;
+	 icmphdr->type = echo_reply;
+	 __u16 m1 = * (__u16 *) icmphdr;
+    icmphdr->cksum = ~(csum16_add(csum16_add(~icmphdr->cksum, ~m0), m1));
+	bpf_printk("Checksum:%x\n",icmphdr->cksum);
+	//bpf_printk("Checksum: %hu\tMy Checksum: %hu\n", icmphdr->cksum, ~(csum16_add(csum16_add(~icmphdr->cksum, ~m0), m1)));
 	action = XDP_TX;
 
 out:
-	bpf_printk("Unknown Eth type: %hu\t%d\t%d\n", eth_type, ip_type, icmp_type);
+
 	return xdp_stats_record_action(ctx, action);
 }
 

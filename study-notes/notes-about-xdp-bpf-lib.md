@@ -224,3 +224,6 @@ and then set the vlan_hdr pointer to the offset sizeof(ethernet header), the eth
 * The TCI (Tag control information) in 802.1q (vlan) header contains 3 bits priority level and 1 bit congestion collection,
 the rest 12 bits are for vid. The sample code doesn't explicitly separate them.
 * Be careful with overflow, and remember calling `bpf_htons()` to the header.
+
+### Lesson packet03
+* when loading package03 kernel code, ulimit -l ==> unlimited (max locked memory). [Discussion](https://github.com/xdp-project/xdp-tutorial/issues/55)
