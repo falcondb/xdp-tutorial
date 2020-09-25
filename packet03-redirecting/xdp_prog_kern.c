@@ -22,6 +22,7 @@
                          ##__VA_ARGS__);                        \
 })
 
+
 struct bpf_map_def SEC("maps") tx_port = {
 	.type = BPF_MAP_TYPE_DEVMAP,
 	.key_size = sizeof(int),
@@ -172,6 +173,10 @@ int xdp_redirect_func(struct xdp_md *ctx)
 	struct ethhdr *eth;
 	int eth_type;
 	int action = XDP_PASS;
+	unsigned char dest[ETH_ALEN] = { 0x8a, 0xef, 0x37, 0xfb, 0xe5, 0x57};
+	unsigned char src[ETH_ALEN] = { 0x86, 0xa9, 0xc5, 0x81, 0x5d, 0xbf };
+	unsigned ifindex = 40;
+	int i;
 	/* unsigned char dst[ETH_ALEN] = {} */	/* Assignment 2: fill in with the MAC address of the left inner interface */
 	/* unsigned ifindex = 0; */		/* Assignment 2: fill in with the ifindex of the left interface */
 
@@ -185,6 +190,16 @@ int xdp_redirect_func(struct xdp_md *ctx)
 
 	/* Assignment 2: set a proper destination address and call the
 	 * bpf_redirect() with proper parameters, action = bpf_redirect(...) */
+    #pragma unroll
+    for (i = 0; i < ETH_ALEN; i++) {
+    eth->h_dest[i] = dest[i];
+    }
+
+    #pragma unroll
+    for (i = 0; i < ETH_ALEN; i++) {
+    eth->h_source[i] = src[i];
+    }
+    action = bpf_redirect(ifindex, 0);
 
 out:
 	return xdp_stats_record_action(ctx, action);
