@@ -20,6 +20,7 @@ static const char *__doc__ = "XDP redirect helper\n"
 #include <net/if.h>
 #include <linux/if_ether.h>
 #include <linux/if_link.h> /* depend on kernel-headers installed */
+#include <linux/err.h>
 
 #include "../common/common_params.h"
 #include "../common/common_user_bpf_xdp.h"
@@ -50,12 +51,31 @@ static const struct option_wrapper long_options[] = {
 	{{0, 0, NULL,  0 }, NULL, false}
 };
 
-static int parse_mac(char *str, unsigned char mac[ETH_ALEN])
+static int parse_u8(char *str, unsigned char *x)
 {
-	/* Assignment 3: parse a MAC address in this function and place the
-	 * result in the mac array */
+	unsigned long z;
+
+	z = strtoul(str, 0, 16);
+	if (z > 0xff)
+		return -1;
+
+	if (x)
+		*x = z;
 
 	return 0;
+}
+
+static int parse_mac(char *str, unsigned char mac[ETH_ALEN])
+{
+    int i;
+    unsigned char *p = mac;
+    for (i = 0; i < ETH_ALEN; i++)
+    {
+      if (parse_u8 (str + i * 3, p++) < 0)
+        return -1;
+    }
+
+    return 0;
 }
 
 static int write_iface_params(int map_fd, unsigned char *src, unsigned char *dest)
@@ -125,9 +145,10 @@ int main(int argc, char **argv)
 
 
 	/* Assignment 3: open the tx_port map corresponding to the cfg.ifname interface */
-	map_fd = -1;
 
-	printf("map dir: %s\n", pin_dir);
+	/** Begin of my implementation **/
+
+    map_fd = open_bpf_map_file(pin_dir, "tx_port", NULL);
 
 	if (redirect_map) {
 		/* setup a virtual port for the static redirect */
@@ -136,7 +157,7 @@ int main(int argc, char **argv)
 		printf("redirect from ifnum=%d to ifnum=%d\n", cfg.ifindex, cfg.redirect_ifindex);
 
 		/* Assignment 3: open the redirect_params map corresponding to the cfg.ifname interface */
-		map_fd = -1;
+		map_fd = open_bpf_map_file(pin_dir, "redirect_params", NULL);
 
 		/* Setup the mapping containing MAC addresses */
 		if (write_iface_params(map_fd, src, dest) < 0) {
@@ -145,6 +166,7 @@ int main(int argc, char **argv)
 		}
 	} else {
 		/* Assignment 4: setup 1-1 mapping for the dynamic router */
+		//
 	}
 
 	return EXIT_OK;
