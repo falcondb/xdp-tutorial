@@ -3,6 +3,7 @@
 #include <linux/in.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
+#include <linux/socket.h>
 
 // The parsing helper functions from the packet01 lesson have moved here
 #include "../common/parsing_helpers.h"
@@ -285,14 +286,14 @@ int xdp_router_func(struct xdp_md *ctx)
 		if (iph->ttl <= 1)
 			goto out;
 
-		fib_params.family	= AF_INET;
-		fib_params.tos		= iph->tos;
-		fib_params.l4_protocol	= iph->protocol;
-		fib_params.sport	= 0;
-		fib_params.dport	= 0;
-		fib_params.tot_len	= bpf_ntohs(iph->tot_len);
-		fib_params.ipv4_src	= iph->saddr;
-		fib_params.ipv4_dst	= iph->daddr;
+		fib_params.family = 2;
+		fib_params.l4_protocol = iph->protocol;
+		fib_params.sport = 0;
+		fib_params.dport = 0;
+		fib_params.tot_len = bpf_ntohs(iph->tot_len);
+		fib_params.tos = iph->tos;
+		fib_params.ipv4_src = iph->saddr;
+		fib_params.ipv4_dst = iph->daddr;
 	} else if (h_proto == bpf_htons(ETH_P_IPV6)) {
 		struct in6_addr *src = (struct in6_addr *) fib_params.ipv6_src;
 		struct in6_addr *dst = (struct in6_addr *) fib_params.ipv6_dst;
@@ -320,6 +321,8 @@ int xdp_router_func(struct xdp_md *ctx)
 
 	fib_params.ifindex = ctx->ingress_ifindex;
 
+	//bpf_printk("Before bpf_fib_lookup: %x %x\n", fib_params.ipv4_src, fib_params.ipv4_dst);
+
 	rc = bpf_fib_lookup(ctx, &fib_params, sizeof(fib_params), 0);
 	switch (rc) {
 	case BPF_FIB_LKUP_RET_SUCCESS:         /* lookup successful */
@@ -331,6 +334,9 @@ int xdp_router_func(struct xdp_md *ctx)
 		memcpy(eth->h_dest, fib_params.dmac, ETH_ALEN);
 		memcpy(eth->h_source, fib_params.smac, ETH_ALEN);
 		action = bpf_redirect(fib_params.ifindex, 0);
+
+        //bpf_printk("After bpf_redirect: %d %x %x\n", fib_params.ifindex, fib_params.smac[0], fib_params.dmac[0]);
+
 		break;
 	case BPF_FIB_LKUP_RET_BLACKHOLE:    /* dest is blackholed; can be dropped */
 	case BPF_FIB_LKUP_RET_UNREACHABLE:  /* dest is unreachable; can be dropped */
@@ -353,26 +359,24 @@ out:
 SEC("xdp_pass")
 int xdp_pass_func(struct xdp_md *ctx)
 {
-       void *data_end = (void *)(long)ctx->data_end;
-       void *data = (void *)(long)ctx->data;
-       struct ethhdr *eth = data;
-       __u16 h_proto;
-       __u64 nh_off;
-       int action = XDP_PASS;
-        bpf_printk("xdp_pass\n");
-       nh_off = sizeof(*eth);
-       if (data + nh_off > data_end) {
-               action = XDP_DROP;
-               goto out;
-       }
+	void *data_end = (void *)(long)ctx->data_end;
+	void *data = (void *)(long)ctx->data;
+	struct ethhdr *eth = data;
+	__u16 h_proto;
+	__u64 nh_off;
+	int action = XDP_PASS;
 
-       bpf_printk("Package from ifindex = %d\tsmac = %x, %x\tdmac = %x\n",
-       ctx->ingress_ifindex, eth->h_source[0], eth->h_dest[0]);
-       h_proto = eth->h_proto;
-       if (h_proto == bpf_htons(ETH_P_IP)) {
-           bpf_printk("Is a IPv4\n");
-           bpf_printk("Package from ifindex = %d\n", ctx->ingress_ifindex);
-       }
+	nh_off = sizeof(*eth);
+	if (data + nh_off > data_end) {
+		action = XDP_DROP;
+		goto out;
+	}
+
+	h_proto = eth->h_proto;
+	if (h_proto == bpf_htons(ETH_P_IP)) {
+	    //bpf_printk("Package from ifindex = %d\n", ctx->ingress_ifindex);
+
+	}
 
 out:
 	return XDP_PASS;
