@@ -23,6 +23,8 @@
                          ##__VA_ARGS__);                        \
 })
 
+#define BTOC(V) ({V > 9 ? 'a' + V - 10 : '0' + V;})
+
 
 struct bpf_map_def SEC("maps") tx_port = {
 	.type = BPF_MAP_TYPE_DEVMAP,
@@ -37,6 +39,26 @@ struct bpf_map_def SEC("maps") redirect_params = {
 	.value_size = ETH_ALEN,
 	.max_entries = 1,
 };
+
+static __always_inline void btostr(unsigned char bvalue, char *str) {
+
+    unsigned char v = bvalue >> 4;
+    str[0] = BTOC(v);
+
+    v = bvalue & 0xf;
+    str[1] = BTOC(v);
+    str[2] = ':';
+}
+
+static __always_inline void mactostr(char * st, char *buf) {
+    int i;
+
+    #pragma unroll
+    for (i = 0; i < ETH_ALEN; i++)
+        btostr(st[i], buf + (i*3));
+
+    buf[ETH_ALEN*3-1] = '\0';
+}
 
 static __always_inline __u16 csum16_add(__u16 csum, __u16 addend)
 {
@@ -267,6 +289,7 @@ int xdp_router_func(struct xdp_md *ctx)
 	__u64 nh_off;
 	int rc;
 	int action = XDP_PASS;
+	char strbuf[ETH_ALEN * 3];
 
 	nh_off = sizeof(*eth);
 	if (data + nh_off > data_end) {
@@ -294,6 +317,8 @@ int xdp_router_func(struct xdp_md *ctx)
 		fib_params.tos = iph->tos;
 		fib_params.ipv4_src = iph->saddr;
 		fib_params.ipv4_dst = iph->daddr;
+
+	    bpf_printk("bpf_fib_lookup: %x %x\n", fib_params.ipv4_src, fib_params.ipv4_dst);
 	} else if (h_proto == bpf_htons(ETH_P_IPV6)) {
 		struct in6_addr *src = (struct in6_addr *) fib_params.ipv6_src;
 		struct in6_addr *dst = (struct in6_addr *) fib_params.ipv6_dst;
@@ -321,8 +346,6 @@ int xdp_router_func(struct xdp_md *ctx)
 
 	fib_params.ifindex = ctx->ingress_ifindex;
 
-	//bpf_printk("Before bpf_fib_lookup: %x %x\n", fib_params.ipv4_src, fib_params.ipv4_dst);
-
 	rc = bpf_fib_lookup(ctx, &fib_params, sizeof(fib_params), 0);
 	switch (rc) {
 	case BPF_FIB_LKUP_RET_SUCCESS:         /* lookup successful */
@@ -335,7 +358,11 @@ int xdp_router_func(struct xdp_md *ctx)
 		memcpy(eth->h_source, fib_params.smac, ETH_ALEN);
 		action = bpf_redirect(fib_params.ifindex, 0);
 
-        //bpf_printk("After bpf_redirect: %d %x %x\n", fib_params.ifindex, fib_params.smac[0], fib_params.dmac[0]);
+        mactostr(fib_params.smac, strbuf);
+        bpf_printk("bpf_redirect src MAC: %s\n", strbuf);
+
+        mactostr(fib_params.dmac, strbuf);
+        bpf_printk("bpf_redirect dst MAC: %s\n", strbuf);
 
 		break;
 	case BPF_FIB_LKUP_RET_BLACKHOLE:    /* dest is blackholed; can be dropped */
@@ -365,6 +392,7 @@ int xdp_pass_func(struct xdp_md *ctx)
 	__u16 h_proto;
 	__u64 nh_off;
 	int action = XDP_PASS;
+	char strbuf[ETH_ALEN * 3];
 
 	nh_off = sizeof(*eth);
 	if (data + nh_off > data_end) {
@@ -373,9 +401,12 @@ int xdp_pass_func(struct xdp_md *ctx)
 	}
 
 	h_proto = eth->h_proto;
-	if (h_proto == bpf_htons(ETH_P_IP)) {
-	    //bpf_printk("Package from ifindex = %d\n", ctx->ingress_ifindex);
-
+	if (h_proto == bpf_htons(ETH_P_IP) || h_proto == bpf_htons(ETH_P_IPV6)) {
+	    bpf_printk("Package from ifindex = %d\n", ctx->ingress_ifindex);
+        mactostr(eth->h_source, strbuf);
+        bpf_printk("Inner src MAC: %s\n", strbuf);
+        mactostr(eth->h_dest, strbuf);
+        bpf_printk("Inner dst MAC: %s\n", strbuf);
 	}
 
 out:
