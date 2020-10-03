@@ -41,4 +41,30 @@ int trace_xdp_exception(struct xdp_exception_ctx *ctx)
 	return 0;
 }
 
+
+SEC("tracepoint/xdp/xdp_redirect")
+int trace_xdp_rediect(struct xdp_exception_ctx *ctx)
+{
+	__s32 key = ctx->ifindex;
+	__u32 *valp;
+
+	/* Collecting stats only for XDP_ABORTED action. */
+	if (ctx->act != XDP_REDIRECT)
+		return 0;
+
+	/* Lookup in kernel BPF-side returns pointer to actual data. */
+	valp = bpf_map_lookup_elem(&xdp_stats_map, &key);
+
+	/* If there's no record for interface, we need to create one,
+	 * with number of packets == 1
+	 */
+	if (!valp) {
+		__u64 one = 1;
+		return bpf_map_update_elem(&xdp_stats_map, &key, &one, 0) ? 1 : 0;
+	}
+
+	(*valp)++;
+	return 0;
+}
+
 char _license[] SEC("license") = "GPL";

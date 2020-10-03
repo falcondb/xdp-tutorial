@@ -41,11 +41,9 @@ The default llvm clang toolset doesn't support XDP, so upgraded it
 yum install centos-release-scl
 yum install llvm-toolset-7
 scl enable llvm-toolset-7 bash
-```
 
-### Upgrade gcc
-```
-yum install centos-release-scl
-yum install devtoolset-7-gcc*
-scl enable devtoolset-7 bash
+clang version 5.0.1
+LLVM version 5.0.1
+gcc (GCC) 4.8.5
+
 ```

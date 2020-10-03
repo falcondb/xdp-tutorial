@@ -1,179 +1,6 @@
-## Notes of studying the tutorial code
-
-
-### testenv script
-The MAC addresses of the veth dev with vlan id are same as the their parent.
-> Setup routing between a veth pair
-`ip neigh add "$INSIDE_IP4" lladdr "$INSIDE_MAC" dev "$NS" nud permanent`
-
-### data structures
-#### bpf_object
-bpf_prog_load_xattr in libbpf.c populates it by reading an object file
-```
-struct bpf_object {
-	char name[BPF_OBJ_NAME_LEN];
-	char license[64];
-	__u32 kern_version;
-
-	struct bpf_program *programs;
-	size_t nr_programs;
-	struct bpf_map *maps;
-	size_t nr_maps;
-	size_t maps_cap;
-	struct bpf_secdata sections;
-
-	bool loaded;
-	bool has_pseudo_calls;
-	bool relaxed_core_relocs;
-
-	/*
-	 * Information when doing elf related work. Only valid if fd
-	 * is valid.
-	 */
-	struct {
-		int fd;
-		const void *obj_buf;
-		size_t obj_buf_sz;
-		Elf *elf;
-		GElf_Ehdr ehdr;
-		Elf_Data *sym bols;
-		Elf_Data *data;
-		Elf_Data *rodata;
-		Elf_Data *bss;
-		size_t strtabidx;
-		struct {
-			GElf_Shdr shdr;
-			Elf_Data *data;
-		} *reloc_sects;
-		int nr_reloc_sects;
-		int maps_shndx;
-		int btf_maps_shndx;
-		int text_shndx;
-		int data_shndx;
-		int rodata_shndx;
-		int bss_shndx;
-	} efile;
-	/*
-	 * All loaded bpf_object is linked in a list, which is
-	 * hidden to caller. bpf_objects__<func> handlers deal with
-	 * all objects.
-	 */
-	struct list_head list;
-
-	struct btf *btf;
-	struct btf_ext *btf_ext;
-
-	void *priv;
-	bpf_object_clear_priv_t clear_priv;
-
-	struct bpf_capabilities caps;
-
-	char path[];
-};
-```
-- bpf_program
-One way of reading bpf_programs is through bpf_object__for_each_program defined in libbpf.h
-```
-struct bpf_program {
-	/* Index in elf obj file, for relocation use. */
-	int idx;
-	char *name;
-	int prog_ifindex;
-	char *section_name;
-	char *pin_name;
-
-	struct bpf_insn *insns;
-
-	size_t insns_cnt, main_prog_cnt;
-	enum bpf_prog_type type;
-
-	struct reloc_desc {} *reloc_desc;
-	int nr_reloc;
-	int log_level;
-
-	struct {
-		int nr;
-		int *fds;
-	} instances;
-	bpf_program_prep_t preprocessor;
-
-	struct bpf_object *obj;
-	void *priv;
-	bpf_program_clear_priv_t clear_priv;
-
-	enum bpf_attach_type expected_attach_type;
-	__u32 attach_btf_id;
-	__u32 attach_prog_fd;
-	void *func_info;
-	__u32 func_info_rec_size;
-	__u32 func_info_cnt;
-
-	struct bpf_capabilities *caps;
-
-	void *line_info;
-	__u32 line_info_rec_size;
-	__u32 line_info_cnt;
-	__u32 prog_flags;
-};
-```
-- bpf_map
-```
-struct bpf_map {
-	int fd;
-	char *name;
-	int sec_idx;
-	size_t sec_offset;
-	int map_ifindex;
-	int inner_map_fd;
-	struct bpf_map_def def;
-	__u32 btf_key_type_id;
-	__u32 btf_value_type_id;
-	void *priv;
-	bpf_map_clear_priv_t clear_priv;
-	enum libbpf_map_type libbpf_type;
-	char *pin_path;
-	bool pinned;
-	bool reused;
-};
-
-struct bpf_map_def {
-	unsigned int type;
-	unsigned int key_size;
-	unsigned int value_size;
-	unsigned int max_entries;
-	unsigned int map_flags;
-};
-
-struct bpf_map_info {
-	__u32 type;
-	__u32 id;
-	__u32 key_size;
-	__u32 value_size;
-	__u32 max_entries;
-	__u32 map_flags;
-	char  name[BPF_OBJ_NAME_LEN];
-	__u32 ifindex;
-	__u32 :32;
-	__u64 netns_dev;
-	__u64 netns_ino;
-	__u32 btf_id;
-	__u32 btf_key_type_id;
-	__u32 btf_value_type_id;
-}
-
-#uapi/linux/bpf.h
-struct xdp_md {
-	__u32 data;
-	__u32 data_end;
-	__u32 data_meta;
-	/* Below access go through struct xdp_rxq_info */
-	__u32 ingress_ifindex; /* rxq->dev->ifindex */
-	__u32 rx_queue_index;  /* rxq->queue_index  */
-};
-```
-### common code
-
-
+# Notes about the XDP tutorial
+[XDP tutorial](https://github.com/xdp-project/xdp-tutorial)
+## Lesson basic
 ### Lesson basic01
 ```
 // Read the bpf object file and program fd with the given file name
@@ -199,7 +26,7 @@ Note about reusing an existing map when reloading an ELF with map definition ins
 > * tools/lib/bpf/bpf.c provides a wrapper function for bpf syscall with BPF_OBJ_GET, which get the fd of the pinned map from kernel.
 > * tools/lib/bpf/bpf_object__reuse_map.c:bpf_object__reuse_map() first tries to get the fd of the specified pinned map (using the path) by querying kernel, and check the compatibility. Then calls bpf_map__reuse_fd() that makes a syscall with BPF_OBJ_GET_INFO_BY_FD to get bpf_map_info. Open a new fd, and dup the fd of the existing map to the new fd, finally, sets the bpf_map_info of the existing map from kernel to the bpf_map loaded from ELF file.
 
-
+## Lesson packet
 ### Lesson packet01
 
 * The XDP is only attached to the ingress path, not the egress path.
@@ -225,6 +52,10 @@ and then set the vlan_hdr pointer to the offset sizeof(ethernet header), the eth
 the rest 12 bits are for vid. The sample code doesn't explicitly separate them.
 * Be careful with overflow, and remember calling `bpf_htons()` to the header.
 
+#### Summary of packet02 exercise
+* bpf_xdp_adjust_head/tail to extend/shrink the memory for the network package stack.
+* The checksum in UDP is optional for IPV4! It is mandatory for TCP and IPv6.
+
 ### Lesson packet03
 * when loading package03 kernel code, ulimit -l ==> unlimited (max locked memory). [Discussion](https://github.com/xdp-project/xdp-tutorial/issues/55)
 * bpf_redirect()'s implementation is generated by BPF_CALL_2(bpf_redirect, u32, ifindex, u64, flags), see filter.h
@@ -232,4 +63,26 @@ the rest 12 bits are for vid. The sample code doesn't explicitly separate them.
 * strtoul, strtoull, strtouq - convert a string to an unsigned long integer
 * The error message I hit `WARN: Failed to update bpf map file: err(7):Argument list too long` is misleading, it turns out it is due to adding new element in a map whose max_entries is 1.
 	* `Argument list too long` is the message for error code `E2BIG in uapi/asm-generic/errno-base.h`.
-	* Looks like the `E2BIG` was from `alloc_htab_elem() in kernel/bpf/hashtab.c` 
+	* Looks like the `E2BIG` was from `alloc_htab_elem() in kernel/bpf/hashtab.c`
+
+### Lesson packet04
+* `bpf_fib_lookup` returns the src & dst MAC and the ifindex of the routing request (src & dst IPs etc. are given to `bpf_fib_lookup`).
+* remember to decrease TTL
+* Didn't figure out how to include AF_XXX macros, they are defined in linux/socket.h, but it is not included in the compiling, don't know why :(.
+TODO: is it possible to implement the same routing by configure routing table??
+
+#### Summary of packet03 exercise
+
+* In lesson #1, the trick of echo ICMP request is: 1 ) swapping IP and Mac addresses and changing the ICMP type to ECHO_REPLY; 2) recalculating the checksum of ICMP package; 3) delivering the package back to the same dev.
+* In lesson #2, two namespaces and their veth pairs are set up. The challenge is to enable ICMP between them. The trick played here is hard-coding the redirect ifindex and src & dst MAC address, adding the hard-coded MAC to the ICMP request package.
+So, the receiver will receive it (XDP_PASS), but don't know how to reply to it.
+* In lesson #3, a map is used to configure the src and dst MAC from userland.
+* In lession #4, `bpf_fib_lookup` is called to get the src & dst MAC by the src & dst IPs.
+
+The calculation of checksum in network protocols, and the re-calculation by using the delta in the package.
+
+## Lesson tracing
+### Lesson tracing01
+* In the kernel side, at the tracing point, update the event count in a BPF map
+* In the user side, load all the objects, like BPF progs and maps in the object file. Get the fd of the BPF prog attached to trace point. Read the id in ftrace/event/XXX/id, call `sys_perf_event_open` to open the perf event for the tracepoint and the call returns a fd of the perf event. `ioctl(event_fd, PERF_EVENT_IOC_SET_BPF, bpf_fd)` to attach the BPF code to the trace point, finally, enable the perf event by `ioctl(event_fd, PERF_EVENT_IOC_ENABLE, 0)`.
+* When I tried to attach a BPF program to the XDP tracepoint in a different net namespace `ip netns exec XXX bash`, an error saying `ERR: can't get program section`, which doesn't tell us the root cause. By debugging the loader code in the net namespace, I found the problem is the ftrace file system is not mounted. What a misleading error message.
