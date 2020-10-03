@@ -92,7 +92,7 @@ void parse_cmdline_args(int argc, char **argv,
 	}
 
 	/* Parse commands line args */
-	while ((opt = getopt_long(argc, argv, "hd:r:L:R:ASNFUMQ:czpq",
+	while ((opt = getopt_long(argc, argv, "hd:e:r:L:R:g:ASNFUMQ:czpq",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
 		case 'd':
@@ -182,6 +182,14 @@ void parse_cmdline_args(int argc, char **argv,
 		case 'z':
 			cfg->xsk_bind_flags &= XDP_COPY;
 			cfg->xsk_bind_flags |= XDP_ZEROCOPY;
+			break;
+		case 'e':
+			dest  = (char *)&cfg->event_name;
+			strncpy(dest, optarg, sizeof(cfg->event_name));
+			break;
+		case 'g':
+			dest  = (char *)&cfg->progsec;
+			strncpy(dest, optarg, sizeof(cfg->progsec));
 			break;
 		case 'h':
 			full_help = true;

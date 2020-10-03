@@ -40,6 +40,7 @@ static const char *__doc__ = "XDP loader and stats program\n"
 #endif
 
 static const char *default_filename = "trace_prog_kern.o";
+static const char *default_event = "xdp/xdp_exception";
 
 static const struct option_wrapper long_options[] = {
 	{{"help",        no_argument,		NULL, 'h' },
@@ -51,6 +52,8 @@ static const struct option_wrapper long_options[] = {
 	{{"filename",    required_argument,	NULL,  1  },
 	 "Load program from <file>", "<file>"},
 
+	{{"ftrace event name",    required_argument,	NULL,  1  },
+	 "Attach to <tracepoint>", "<tracepoint>"},
 	{{0, 0, NULL,  0 }}
 };
 
@@ -215,7 +218,14 @@ static struct bpf_object* load_bpf_and_trace_attach(struct config *cfg)
 		goto err;
 	}
 
-	if (read_tp_id("xdp/xdp_exception", &id)) {
+	bpf_fd = bpf_object__find_program_by_title(obj, cfg->progsec);
+
+    if (!cfg->event_name) {
+        err = read_tp_id(default_event, &id);
+    } else {
+        err = read_tp_id(cfg->event_name, &id);
+    }
+	if (err) {
 		fprintf(stderr, "ERR: can't get program section\n");
 		goto err;
 	}

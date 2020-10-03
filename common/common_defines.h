@@ -17,6 +17,7 @@ struct config {
 	bool reuse_maps;
 	char pin_dir[512];
 	char filename[512];
+	char event_name[512];
 	char progsec[32];
 	char src_mac[18];
 	char dest_mac[18];
